@@ -1,8 +1,9 @@
 <script>
 	import {untrack, tick} from 'svelte'
 
-	let splitView = $state(false)
-	let polar = $state(true)
+	let splitView = $state(true)
+	let coordinates = $state("polar")
+	let polar = $derived(coordinates === "polar")
 
 	const w = 16
 	const h = 16
@@ -21,12 +22,12 @@
 		phases: Array(w*h).fill(0),
 	})
 
-	let spatialFocus = $state({x:0,y:0})
-	let frequencyFocus = $state({x:0,y:0})
+	let spatialFocus = $state({x:8,y:8})
+	let frequencyFocus = $state({x:8,y:8})
 
 
-	const rows = $derived(Array(image.height).fill(0).map((x,i) => i))
-	const columns = $derived(Array(image.width).fill(0).map((x,i) => i))
+	const rows = $derived(Array(image.height).fill(0).map((x,i) => (i + image.height/2)%image.height))
+	const columns = $derived(Array(image.width).fill(0).map((x,i) => (i + image.width/2)%image.width))
 	const viewBox = `-0.2 -0.2 ${image.width+0.4} ${image.height+0.4}`
 
 
@@ -115,14 +116,14 @@
 
 <h1>2D DFT</h1>
 
-<fieldset>
+<fieldset style="width: max-content; padding: 1em 1em; margin: auto">
 	<legend>
 		Options
 	</legend>
 
 	<div>
-		<label><input type="radio" bind:group={polar} value={true}> Polar</label>
-	<label><input type="radio" bind:group={polar} value={false}> Cartesian</label>
+		<label><input type="radio" bind:group={coordinates} value={"polar"}> Polar</label>
+	<label><input type="radio" bind:group={coordinates} value={"cartesian"}> Cartesian</label>
 	</div>
 
 
@@ -133,7 +134,7 @@
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; justify-content: center; justify-items: stretch; max-width: 60em; margin: auto;">
 <div class="domain">
-<h2>Spacial Domain</h2>
+<h2>Spatial Domain</h2>
 
 
 
@@ -160,17 +161,42 @@
 
 {#snippet slider(img, other, focus, dir)}
 {#if spatialFocus}
-<fieldset>
-	<legend>Modify</legend>
 
-	{#if polar}
+{@const re = img.mags[rows[focus.y]*img.width+columns[focus.x]] * Math.cos(img.phases[rows[focus.y]*img.width+columns[focus.x]])}
+{@const im = img.mags[rows[focus.y]*img.width+columns[focus.x]] * Math.sin(img.phases[rows[focus.y]*img.width+columns[focus.x]])}
+<fieldset>
+	<legend>Modify Selected Pixel</legend>
+
 	<label>
 		<span>Magnitude:</span>
-	<input type="range" min="0" max="1" step="0.01" bind:value={img.mags[focus.y*img.width+focus.x]} oninput={e => recalculate(other, img, dir)} /></label>
+	<input type="range" min="0" max="1" step="0.01" bind:value={img.mags[rows[focus.y]*img.width+columns[focus.x]]} oninput={e => recalculate(other, img, dir)} /></label>
 	<label>
 		<span>Phase:</span>
-	<input type="range" min="-3.14" max="3.14" bind:value={img.phases[focus.y*img.width+focus.x]} step="0.01"  oninput={e => recalculate(other, img, dir)}/> </label>
-	{/if}
+	<input type="range" min="-3.14" max="3.14" bind:value={img.phases[rows[focus.y]*img.width+columns[focus.x]]} step="0.01"  oninput={e => recalculate(other, img, dir)}/> </label>
+
+	<label>
+		<span>Real:</span>
+	<input type="range" min="-1" max="1" step="0.01" value={re} oninput={e => {
+		const newMag = Math.hypot(e.currentTarget.valueAsNumber, im)
+		const newPhase = Math.atan2(im, e.currentTarget.valueAsNumber)
+
+		img.mags[rows[focus.y]*img.width+columns[focus.x]] = newMag
+		img.phases[rows[focus.y]*img.width+columns[focus.x]] = newPhase
+
+		recalculate(other, img, dir)
+
+	}} /></label>
+	<label>
+		<span>Imaginary:</span>
+	<input type="range" min="-1" max="1" value={im} step="0.01"  oninput={e => {
+		const newMag = Math.hypot(e.currentTarget.valueAsNumber, re)
+		const newPhase = Math.atan2(e.currentTarget.valueAsNumber, re)
+
+		img.mags[rows[focus.y]*img.width+columns[focus.x]] = newMag
+		img.phases[rows[focus.y]*img.width+columns[focus.x]] = newPhase
+
+		recalculate(other, img, dir)
+	}}/> </label>
 </fieldset>
 {/if}
 {/snippet}
@@ -181,52 +207,61 @@
 {#if splitView}
 <div style="display: flex;">
 	<svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" fill="hsl(0,0%,{100*img.mags[y*img.width+x]}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x,y})}
+	{#each rows as y, yi (yi)}
+		{#each columns as x, xi (xi)}
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{100*img.mags[y*img.width+x]}%)" stroke="gray" stroke-width="0.1"
+			onclick={e => onclick({x:xi,y:yi})}
 			></rect>
 		{/each}
 	{/each}
 
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
 	{/if}
 </svg>
 
 <svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" fill="hsl({180+clipPi(img.phases[y*img.width+x])/Math.PI*180},100%,45%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x,y})}></rect>
+	{#each rows as y,yi (yi)}
+		{#each columns as x,xi (xi)}
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsla({180+clipPi(img.phases[y*img.width+x])/Math.PI*180},100%,45%, {Math.abs(Math.sign(img.mags[y*img.width+x]))})" stroke="gray" stroke-width="0.1"
+			onclick={e => onclick({x:xi,y:yi})}></rect>
 		{/each}
 	{/each}
 
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
 	{/if}
 </svg>
 </div>
 {:else}
 
 <svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
+	{#each rows as y, yi (yi)}
+		{#each columns as x, xi (xi)}
 			<path fill="hsl(0,0%,{100*img.mags[y*img.width+x]}%)" stroke="none"
-			d="m{x} {y} h 1 v 1 h-0.4 l -0.6,-0.6 z"pointer-events="none"
+			d="m{xi} {yi} h 1 v 1 h-0.4 l -0.6,-0.6 z"pointer-events="none"
 			></path>
-			<path fill="hsl({180+clipPi(img.phases[y*img.width+x])/Math.PI*180},100%,45%)" stroke="none"
-			d="m{x} {y} m0,0.4 v 0.6 h 0.6 z"pointer-events="none"
+			<path fill="hsla({180+clipPi(img.phases[y*img.width+x])/Math.PI*180},100%,45%, {Math.abs(Math.sign(img.mags[y*img.width+x]))})" stroke="none"
+			d="m{xi} {yi} m0,0.4 v 0.6 h 0.6 z"pointer-events="none"
 			></path>
 
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
-			onclick={e => onclick({x,y})} pointer-events="all"
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
+			onclick={e => onclick({x:xi,y:yi})} pointer-events="all"
 			></rect>
 		{/each}
 	{/each}
 
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2"  />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2"  />
 	{/if}
 </svg>
 {/if}
@@ -234,57 +269,69 @@
 {#if splitView}
 <div style="display: flex;">
 	<svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
+	{#each rows as y,yi (yi)}
+		{#each columns as x,xi (xi)}
 			{@const re = img.mags[y*img.width+x] * Math.cos(img.phases[y*img.width+x])}
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" fill="hsl(0,0%,{50+50*re}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x,y})}
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{50+50*re}%)" stroke="gray" stroke-width="0.1"
+			onclick={e => onclick({x:xi,y:yi})}
 			></rect>
 		{/each}
 	{/each}
 
+
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
 	{/if}
+
+
 </svg>
 
 <svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
+	{#each rows as y,yi (yi)}
+		{#each columns as x,xi (xi)}
 			{@const im = img.mags[y*img.width+x] * Math.sin(img.phases[y*img.width+x])}
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" fill="hsl(0,0%,{50+50*im}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x,y})}></rect>
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{50+50*im}%)" stroke="gray" stroke-width="0.1"
+			onclick={e => onclick({x:xi,y:yi})}></rect>
 		{/each}
 	{/each}
 
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2" />
 	{/if}
 </svg>
 </div>
 {:else}
 
 <svg {viewBox}>
-	{#each rows as y (y)}
-		{#each columns as x (x)}
+	{#each rows as y,yi (yi)}
+		{#each columns as x,xi (xi)}
 			{@const re = img.mags[y*img.width+x] * Math.cos(img.phases[y*img.width+x])}
 
 			{@const im = img.mags[y*img.width+x] * Math.sin(img.phases[y*img.width+x])}
 			<path fill="hsl(0,0%,{50+50*re}%)" stroke="none"
-			d="m{x} {y} h 1 v 1 z"pointer-events="none"
+			d="m{xi} {yi} h 1 v 1 z"pointer-events="none"
 			></path>
 			<path fill="hsl(0,0%,{50+50*im}%)" stroke="none"
-			d="m{x} {y} v 1 h 1 z"pointer-events="none"
+			d="m{xi} {yi} v 1 h 1 z"pointer-events="none"
 			></path>
 
-			<rect tabindex="-1" role="button" {x} {y} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
-			onclick={e => onclick({x,y})} pointer-events="all"
+			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
+			onclick={e => onclick({x:xi,y:yi})} pointer-events="all"
 			></rect>
 		{/each}
 	{/each}
 
+		<circle pointer-events="none" fill="none" r="0.2" stroke="cyan" stroke-width="0.1" cx={columns[0]+0.5} cy={rows[0]+0.5}/>
+
+
 	{#if focus}
-	<rect pointer-events="none" {...focus} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2"  />
+	<rect pointer-events="none" x={focus.x} y={focus.y} width="1" height="1"  stroke="magenta" fill="none" class="focus" rx="0.2" ry="0.2"  />
 	{/if}
 </svg>
 {/if}
@@ -292,8 +339,13 @@
 {/snippet}
 
 <style>
+	* {
+		font-family: monospace;
+	}
+
 	svg {
 		width: 100%;
+		background: black;
 	}
 
 	rect {
@@ -309,6 +361,9 @@
 		display: block;
 	}
 
+	h1 {
+		text-align: center;
+	}
 	h2 {
 		text-align: center;
 	}
