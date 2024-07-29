@@ -22,8 +22,7 @@
 		phases: Array(w*h).fill(0),
 	})
 
-	let spatialFocus = $state({x:8,y:8})
-	let frequencyFocus = $state({x:8,y:8})
+	let focus = $state({type:'spatial', x:w/2,y:h/2})
 
 
 	const rows = $derived(Array(image.height).fill(0).map((x,i) => (i + image.height/2)%image.height))
@@ -114,7 +113,7 @@
 </script>
 
 
-<h1>2D DFT</h1>
+<h1>2D Discrete Fourier Transform</h1>
 
 <fieldset style="width: max-content; padding: 1em 1em; margin: auto">
 	<legend>
@@ -139,28 +138,28 @@
 
 
 
-{@render showImage(image, spatialFocus, ({x,y}) => spatialFocus = ({x,y}))}
+{@render showImage(image, focus.type=="spatial"?focus:null, ({x,y}) => focus = ({type:"spatial", x,y}))}
 
 
-{@render slider(image, spectrum, spatialFocus, 1)}
+{@render slider(image, spectrum, focus.type=="spatial"?focus:null, 1)}
 
 </div>
 
 <div class="domain">
 <h2>Frequency Domain</h2>
 
-{@render showImage(spectrum, frequencyFocus, ({x,y}) => frequencyFocus = ({x,y}))}
+{@render showImage(spectrum, focus.type=="frequency"?focus:null, ({x,y}) => focus = ({type:"frequency",x,y}))}
 
 
 
-{@render slider(spectrum, image, frequencyFocus, -1)}
+{@render slider(spectrum, image, focus.type=="frequency"?focus:null, -1)}
 
 </div>
 </div>
 
 
 {#snippet slider(img, other, focus, dir)}
-{#if spatialFocus}
+{#if focus}
 
 {@const re = img.mags[rows[focus.y]*img.width+columns[focus.x]] * Math.cos(img.phases[rows[focus.y]*img.width+columns[focus.x]])}
 {@const im = img.mags[rows[focus.y]*img.width+columns[focus.x]] * Math.sin(img.phases[rows[focus.y]*img.width+columns[focus.x]])}
@@ -173,6 +172,8 @@
 	<label>
 		<span>Phase:</span>
 	<input type="range" min="-3.14" max="3.14" bind:value={img.phases[rows[focus.y]*img.width+columns[focus.x]]} step="0.01"  oninput={e => recalculate(other, img, dir)}/> </label>
+
+	<hr>
 
 	<label>
 		<span>Real:</span>
@@ -205,12 +206,13 @@
 {@const max = Math.max(0.1, ...image.mags) || 1}
 {#if polar}
 {#if splitView}
-<div style="display: flex;">
+<div class="domain-split">
 	<svg {viewBox}>
+		<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y, yi (yi)}
 		{#each columns as x, xi (xi)}
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{100*img.mags[y*img.width+x]}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x:xi,y:yi})}
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})}
 			></rect>
 		{/each}
 	{/each}
@@ -224,10 +226,11 @@
 </svg>
 
 <svg {viewBox}>
+	<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y,yi (yi)}
 		{#each columns as x,xi (xi)}
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsla({180+clipPi(img.phases[y*img.width+x])/Math.PI*180},100%,45%, {Math.abs(Math.sign(img.mags[y*img.width+x]))})" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x:xi,y:yi})}></rect>
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})}></rect>
 		{/each}
 	{/each}
 
@@ -242,6 +245,7 @@
 {:else}
 
 <svg {viewBox}>
+	<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y, yi (yi)}
 		{#each columns as x, xi (xi)}
 			<path fill="hsl(0,0%,{100*img.mags[y*img.width+x]}%)" stroke="none"
@@ -252,7 +256,7 @@
 			></path>
 
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
-			onclick={e => onclick({x:xi,y:yi})} pointer-events="all"
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})} pointer-events="all"
 			></rect>
 		{/each}
 	{/each}
@@ -267,13 +271,14 @@
 {/if}
 {:else}
 {#if splitView}
-<div style="display: flex;">
+<div class="domain-split">
 	<svg {viewBox}>
+		<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y,yi (yi)}
 		{#each columns as x,xi (xi)}
 			{@const re = img.mags[y*img.width+x] * Math.cos(img.phases[y*img.width+x])}
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{50+50*re}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x:xi,y:yi})}
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})}
 			></rect>
 		{/each}
 	{/each}
@@ -290,11 +295,12 @@
 </svg>
 
 <svg {viewBox}>
+	<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y,yi (yi)}
 		{#each columns as x,xi (xi)}
 			{@const im = img.mags[y*img.width+x] * Math.sin(img.phases[y*img.width+x])}
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" fill="hsl(0,0%,{50+50*im}%)" stroke="gray" stroke-width="0.1"
-			onclick={e => onclick({x:xi,y:yi})}></rect>
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})}></rect>
 		{/each}
 	{/each}
 
@@ -309,20 +315,21 @@
 {:else}
 
 <svg {viewBox}>
+	<rect x="0" y="0" width={img.width} height={img.height} fill="black" />
 	{#each rows as y,yi (yi)}
 		{#each columns as x,xi (xi)}
 			{@const re = img.mags[y*img.width+x] * Math.cos(img.phases[y*img.width+x])}
 
 			{@const im = img.mags[y*img.width+x] * Math.sin(img.phases[y*img.width+x])}
 			<path fill="hsl(0,0%,{50+50*re}%)" stroke="none"
-			d="m{xi} {yi} h 1 v 1 z"pointer-events="none"
+			d="m{xi} {yi} h 1 v 1 h-1 z"pointer-events="none"
 			></path>
 			<path fill="hsl(0,0%,{50+50*im}%)" stroke="none"
 			d="m{xi} {yi} v 1 h 1 z"pointer-events="none"
 			></path>
 
 			<rect tabindex="-1" role="button" x={xi} y={yi} width="1" height="1" stroke="gray" stroke-width="0.1" fill="none"
-			onclick={e => onclick({x:xi,y:yi})} pointer-events="all"
+			onclick={e => onclick({x:xi,y:yi})} onmouseenter={e => e.buttons===1 && onclick({x:xi,y:yi})} pointer-events="all"
 			></rect>
 		{/each}
 	{/each}
@@ -345,16 +352,18 @@
 
 	svg {
 		width: 100%;
-		background: black;
 	}
 
 	rect {
-		stroke-width: 2px;
+		stroke-width: 1px;
+		stroke-linejoin: none;
+		stroke-linecap: none;
 		vector-effect: non-scaling-stroke;
 	}
 
 	.focus {
-		stroke-width: 4px;
+		stroke-width: 2px;
+		vector-effect: non-scaling-stroke;
 	}
 
 	label span {
@@ -372,9 +381,36 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		padding: 0.3em;
+		gap: 0.5em;
+	}
+
+	.domain-split {
+		display: flex;
+		gap: 2px;
 	}
 
 	fieldset {
 		align-self: stretch;
+		border: 1px solid #444;
+	}
+
+	hr {
+		border: none;
+		border-bottom: 1px solid #444;
+		margin: 1em 0 1em;
+		height: 0;
+		padding: 0;
+	}
+
+	legend {
+		background: #444;
+		color: #fff;
+		padding: 2px 6px;
+		display: inline-blockl;
+	}
+
+	input[type=range] {
+		width: 100%;
 	}
 </style>
