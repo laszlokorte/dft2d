@@ -29,6 +29,71 @@
 	const columns = $derived(Array(image.width).fill(0).map((x,i) => (i + image.width/2)%image.width))
 	const viewBox = `-0.2 -0.2 ${image.width+0.4} ${image.height+0.4}`
 
+	function setPhase(subject, value) {
+		let w = subject.width
+		let h = subject.height
+
+		for (let y=0;y<h;y++) {
+			for (let x=0;x<w;x++) {
+				subject.phases[y*w+x] = value
+			}
+		}
+	}
+
+	function setIm(subject, value) {
+		let w = subject.width
+		let h = subject.height
+
+		for (let y=0;y<h;y++) {
+			for (let x=0;x<w;x++) {
+				const mag = subject.mags[y*w+x]
+				const pha = subject.phases[y*w+x]
+
+				const re = mag * Math.cos(pha)
+				const im = mag * Math.sin(pha)
+
+				const newRe = re;
+				const newIm = value;
+
+
+				const newMag = Math.hypot(newRe, newIm)
+				const newPhase = Math.atan2(newIm, newRe)
+
+
+				subject.mags[y*w+x] = newMag
+				subject.phases[y*w+x] = newPhase
+
+			}
+		}
+	}
+
+	function setConjSymmetric(subject) {
+		let w = subject.width
+		let h = subject.height
+
+		const newmags = Array(subject.mags.length).fill(0)
+		const newphases = Array(subject.mags.length).fill(0)
+
+		for (let y=1;y<h;y++) {
+			for (let x=1;x<w;x++) {
+				const magA = subject.mags[rows[y]*w+columns[x]]
+				const phaA = subject.phases[rows[y]*w+columns[x]]
+
+
+				const magB = subject.mags[rows[rows.length-y]*w+columns[columns.length-x]]
+				const phaB = subject.phases[rows[rows.length-y]*w+columns[columns.length-x]]
+
+				newmags[rows[rows.length-y]*w+columns[columns.length-x]] = Math.sqrt(magB*magB+magA*magA)/Math.sqrt(2)
+				newphases[rows[rows.length-y]*w+columns[columns.length-x]] = clipPi(Math.sign(phaB-phaA) * Math.max(Math.abs(phaA),Math.abs(phaB)))
+
+			}
+		}
+
+		newphases[rows[h/2]*w+columns[w/2]] = 0
+
+		subject.phases = newphases
+		subject.mags = newmags
+	}
 
 	function complMul(magA, phaseA, magB, phaseB) {
 		return {
@@ -131,11 +196,19 @@
 	</div>
 </fieldset>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; justify-content: center; justify-items: stretch; max-width: 60em; margin: auto;">
+<div style="display: grid; grid-template-columns: 1fr 1fr; justify-content: center; justify-items: stretch; max-width: 70em; margin: auto;">
 <div class="domain">
 <h2>Spatial Domain</h2>
 
+<fieldset>
+	<legend>Adjustments</legend>
 
+	<div>
+		<button type="button" onclick={e => {setPhase(image, 0); recalculate(spectrum,  image, 1)}}>Set Phase to 0</button>
+		<button type="button" onclick={e => {setIm(image, 0); recalculate(spectrum,  image, 1)}}>Set Im to 0</button>
+		<button type="button" onclick={e => {setConjSymmetric(image); recalculate(spectrum,  image, 1)}}>Make Conj. Symmetric</button>
+	</div>
+</fieldset>
 
 
 {@render showImage(image, focus.type=="spatial"?focus:null, ({x,y}) => focus = ({type:"spatial", x,y}))}
@@ -147,6 +220,16 @@
 
 <div class="domain">
 <h2>Frequency Domain</h2>
+
+<fieldset>
+	<legend>Adjustments</legend>
+
+	<div>
+		<button type="button" onclick={e => {setPhase(spectrum, 0);recalculate(image, spectrum, -1)}}>Set Phase to 0</button>
+		<button type="button" onclick={e => {setIm(spectrum, 0);recalculate(image, spectrum, -1)}}>Set Im to 0</button>
+		<button type="button" onclick={e => {setConjSymmetric(spectrum);recalculate(image, spectrum, -1)}}>Make Conj. Symmetric</button>
+	</div>
+</fieldset>
 
 {@render showImage(spectrum, focus.type=="frequency"?focus:null, ({x,y}) => focus = ({type:"frequency",x,y}))}
 
@@ -167,10 +250,10 @@
 	<legend>Modify Selected Pixel</legend>
 
 	<label>
-		<span>Magnitude:</span>
+		<span>Magnitude: ({img.mags[rows[focus.y]*img.width+columns[focus.x]]})</span>
 	<input type="range" min="0" max="1" step="0.01" bind:value={img.mags[rows[focus.y]*img.width+columns[focus.x]]} oninput={e => recalculate(other, img, dir)} /></label>
 	<label>
-		<span>Phase:</span>
+		<span>Phase: ({img.phases[rows[focus.y]*img.width+columns[focus.x]]})</span>
 	<input type="range" min="-3.14" max="3.14" bind:value={img.phases[rows[focus.y]*img.width+columns[focus.x]]} step="0.01"  oninput={e => recalculate(other, img, dir)}/> </label>
 
 	<hr>
