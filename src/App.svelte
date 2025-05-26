@@ -17,6 +17,14 @@
 	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
 
+	function gamma(v, s) {
+		return (
+			Math.exp(s / 3) *
+			Math.sign(v) *
+			Math.pow(Math.abs(v), Math.exp(-s / 8))
+		);
+	}
+
 	onMount(() => {
 		const exs = [];
 		const poke = new Image();
@@ -87,6 +95,7 @@
 	let image = $state({
 		width: w,
 		height: h,
+		rescale: 0,
 		mags: Array(w * h).fill(0),
 		phases: Array(w * h).fill(0),
 	});
@@ -94,11 +103,12 @@
 	let spectrum = $state({
 		width: w,
 		height: h,
+		rescale: 0,
 		mags: Array(w * h).fill(0),
 		phases: Array(w * h).fill(0),
 	});
 
-	let focus = $state({ type: "spatial", x: w / 2, y: h / 2 });
+	let focus = $state({ type: "frequency", x: w / 2 + 1, y: h / 2 });
 	let focusMirror = $derived(
 		focus ? { x: (w - focus.x) % w, y: (h - focus.y) % h } : null,
 	);
@@ -162,6 +172,17 @@
 		}
 	}
 
+	function setGlobalMagnitude(subject, value) {
+		let w = subject.width;
+		let h = subject.height;
+
+		for (let y = 0; y <= h; y++) {
+			for (let x = 0; x <= w; x++) {
+				subject.mags[xyIndex(subject, x, y)] = value;
+			}
+		}
+	}
+
 	function setGlobalPhase(subject, value) {
 		let w = subject.width;
 		let h = subject.height;
@@ -169,6 +190,30 @@
 		for (let y = 0; y <= h; y++) {
 			for (let x = 0; x <= w; x++) {
 				subject.phases[xyIndex(subject, x, y)] = value;
+			}
+		}
+	}
+
+	function setGlobalRe(subject, value) {
+		let w = subject.width;
+		let h = subject.height;
+
+		for (let y = 0; y <= h; y++) {
+			for (let x = 0; x <= w; x++) {
+				const mag = subject.mags[xyIndex(subject, x, y)];
+				const pha = subject.phases[xyIndex(subject, x, y)];
+
+				const re = mag * Math.cos(pha);
+				const im = mag * Math.sin(pha);
+
+				const newRe = value;
+				const newIm = im;
+
+				const newMag = Math.hypot(newRe, newIm);
+				const newPhase = Math.atan2(newIm, newRe);
+
+				subject.mags[xyIndex(subject, x, y)] = newMag;
+				subject.phases[xyIndex(subject, x, y)] = newPhase;
 			}
 		}
 	}
@@ -206,6 +251,13 @@
 
 		for (let y = 0; y < h; y++) {
 			for (let x = 0; x < w; x++) {
+				if (xyIndex(subject, x, y) === xyMirrorIndex(subject, x, y)) {
+					newmags[xyMirrorIndex(subject, x, y)] =
+						subject.mags[xyIndex(subject, x, y)];
+					newphases[xyMirrorIndex(subject, x, y)] =
+						subject.phases[xyIndex(subject, x, y)];
+					continue;
+				}
 				const magA = subject.mags[xyIndex(subject, x, y)];
 				const phaA = subject.phases[xyIndex(subject, x, y)];
 
@@ -253,9 +305,6 @@
 		const magsOut = Array(w * h).fill(0);
 		const phasesOut = Array(w * h).fill(0);
 
-		const wnorm = dir === 1 ? 1 : 1 / Math.sqrt(w);
-		const hnorm = dir === 1 ? 1 : 1 / Math.sqrt(h);
-
 		for (let y = 0; y < h; y++) {
 			for (let u = 0; u < w; u++) {
 				for (let x = 0; x < w; x++) {
@@ -266,7 +315,7 @@
 						(-2 * dir * Math.PI * x * u) / w,
 					);
 					const sum = complSum(
-						prod.mag * wnorm,
+						prod.mag,
 						prod.phase,
 						accumMag[y * w + u],
 						accumPhase[y * w + u],
@@ -289,7 +338,7 @@
 						(-2 * dir * Math.PI * y * v) / h,
 					);
 					const sum = complSum(
-						prod.mag * hnorm,
+						prod.mag,
 						prod.phase,
 						magsOut[v * w + x],
 						phasesOut[v * w + x],
@@ -314,7 +363,7 @@
 			dir,
 		);
 
-		to.mags = m;
+		to.mags = m.map((x) => x / Math.sqrt(from.width * from.height));
 		to.phases = p;
 	}
 
@@ -330,7 +379,23 @@
 	}
 </script>
 
-<h1>2D Discrete Fourier Transform</h1>
+<h1>
+	<img src="./favicon.svg" class="icon" alt="Icon" />2D Discrete Fourier
+	Transform
+</h1>
+
+<footer>
+	<a
+		class="icon-link"
+		href="//tools.laszlokorte.de"
+		title="More Educational Tools"
+		><img
+			src="//tools.laszlokorte.de/favicon.svg"
+			class="icon"
+			alt="Icon"
+		/> More Educational Tools</a
+	>
+</footer>
 
 <fieldset class="options">
 	<legend
@@ -415,9 +480,23 @@
 				<button
 					type="button"
 					onclick={(e) => {
+						setGlobalMagnitude(image, 1);
+						recalculate(spectrum, image, 1);
+					}}>Set Mag to 1</button
+				>
+				<button
+					type="button"
+					onclick={(e) => {
 						setGlobalPhase(image, 0);
 						recalculate(spectrum, image, 1);
 					}}>Set Phase to 0</button
+				>
+				<button
+					type="button"
+					onclick={(e) => {
+						setGlobalRe(image, 0);
+						recalculate(spectrum, image, 1);
+					}}>Set Re to 0</button
 				>
 				<button
 					type="button"
@@ -475,9 +554,23 @@
 				<button
 					type="button"
 					onclick={(e) => {
+						setGlobalMagnitude(spectrum, 1);
+						recalculate(image, spectrum, -1);
+					}}>Set Mag to 1</button
+				>
+				<button
+					type="button"
+					onclick={(e) => {
 						setGlobalPhase(spectrum, 0);
 						recalculate(image, spectrum, -1);
 					}}>Set Phase to 0</button
+				>
+				<button
+					type="button"
+					onclick={(e) => {
+						setGlobalRe(spectrum, 0);
+						recalculate(image, spectrum, -1);
+					}}>Set Re to 0</button
 				>
 				<button
 					type="button"
@@ -806,7 +899,7 @@
 				</div>
 			{:else if sliderStyle == "plane"}
 				<svg
-					viewBox="-105 -105 210 210"
+					viewBox="-210 -210 440 440"
 					class="polar-control"
 					style:--value-phase={img.phases[
 						rows[focus.y] * img.width + columns[focus.x]
@@ -814,8 +907,8 @@
 				>
 					<line
 						class="polar-control-axis"
-						x1="-100"
-						x2="100"
+						x1="-200"
+						x2="200"
 						y1="0"
 						y2="0"
 						stroke="black"
@@ -825,8 +918,8 @@
 						class="polar-control-axis"
 						x1="0"
 						x2="0"
-						y1="-100"
-						y2="100"
+						y1="-200"
+						y2="200"
 						stroke="black"
 						stroke-width="1"
 					/>
@@ -841,22 +934,25 @@
 						stroke-dasharray="5 5"
 					/>
 
-					<path class="polar-control-tip" d="M103 0 l -5 -3 v 6 z " />
 					<path
 						class="polar-control-tip"
-						d="M 0 -103 l  -3 5 h 6 z "
+						d="M203 0 l -10 -6 v 12 z "
+					/>
+					<path
+						class="polar-control-tip"
+						d="M 0 -203 l  -6 10 h 12 z "
 					/>
 
 					<text
 						text-anchor="end"
-						x="95"
+						x="195"
 						y="-5"
 						class="polar-control-axis-label">Real</text
 					>
 					<text
 						text-anchor="start"
 						x="5"
-						y="-90"
+						y="-190"
 						class="polar-control-axis-label">Imaginary</text
 					>
 
@@ -939,7 +1035,7 @@
 						<circle
 							cx={100 * re}
 							cy={100 * im}
-							r="4"
+							r="8"
 							fill="DodgerBlue"
 							cursor="move"
 							stroke="white"
@@ -954,7 +1050,7 @@
 					<circle
 						cx={100 * re}
 						cy={-100 * im}
-						r="5"
+						r="10"
 						fill="DodgerBlue"
 						cursor="move"
 						stroke="white"
@@ -962,6 +1058,7 @@
 						class="polar-control-head"
 						onpointerdown={(evt) => {
 							if (evt.isPrimary) {
+								evt.preventDefault();
 								const svg = evt.currentTarget.ownerSVGElement;
 								const pt = svg.createSVGPoint();
 
@@ -984,6 +1081,16 @@
 								);
 							}
 						}}
+						onpointerup={(evt) => {
+							if (
+								evt.isPrimary &&
+								evt.currentTarget.hasPointerCapture(
+									evt.pointerId,
+								)
+							) {
+								evt.preventDefault();
+							}
+						}}
 						onpointermove={(evt) => {
 							if (
 								evt.isPrimary &&
@@ -991,6 +1098,7 @@
 									evt.pointerId,
 								)
 							) {
+								evt.preventDefault();
 								const offsetX = parseFloat(
 									evt.currentTarget.getAttribute(
 										"data-offset-x",
@@ -1010,13 +1118,17 @@
 									svg.getScreenCTM().inverse(),
 								);
 
-								const newRe = svgGlobal.x / 100;
-								const newIm = -svgGlobal.y / 100;
+								const newRe =
+									Math.max(-200, Math.min(200, svgGlobal.x)) /
+									100;
+								const newIm =
+									-Math.max(
+										-200,
+										Math.min(200, svgGlobal.y),
+									) / 100;
 
-								const newMag = Math.min(
-									1,
-									Math.hypot(newRe, newIm),
-								);
+								const newMag = Math.hypot(newRe, newIm);
+
 								const newPhase = Math.atan2(newIm, newRe);
 								setPolar(
 									img,
@@ -1050,12 +1162,12 @@
 							{#each rows as y, yi (yi)}
 								{#each columns as x, xi (xi)}
 									{@const re = Math.cos(
-										-(
-											(columns[x] * columns[focus.x]) /
-												other.width +
-											(rows[y] * rows[focus.y]) /
-												other.height
-										) *
+										dir *
+											(1 +
+												(x * columns[focus.x]) /
+													other.width +
+												(y * rows[focus.y]) /
+													other.height) *
 											2 *
 											Math.PI +
 											other.phases[
@@ -1065,12 +1177,12 @@
 									)}
 
 									{@const im = Math.sin(
-										-(
-											(columns[x] * columns[focus.x]) /
-												other.width +
-											(rows[y] * rows[focus.y]) /
-												other.height
-										) *
+										dir *
+											(1 +
+												(x * columns[focus.x]) /
+													other.width +
+												(y * rows[focus.y]) /
+													other.height) *
 											2 *
 											Math.PI +
 											other.phases[
@@ -1107,7 +1219,8 @@
 										fill="hsl({hue}, {70 * sat}%, {light}%)"
 										stroke="gray"
 										stroke-width="0.1"
-									></rect>{/each}
+									></rect>
+								{/each}
 							{/each}
 						</svg>
 						<figcaption class="plot-caption">
@@ -1127,12 +1240,11 @@
 							{#each rows as y, yi (yi)}
 								{#each columns as x, xi (xi)}
 									{@const re = Math.cos(
-										-(
-											(columns[x] * columns[focus.x]) /
+										dir *
+											((x * columns[focus.x]) /
 												other.width +
-											(rows[y] * rows[focus.y]) /
-												other.height
-										) *
+												(y * rows[focus.y]) /
+													other.height) *
 											2 *
 											Math.PI +
 											other.phases[
@@ -1142,12 +1254,11 @@
 									)}
 
 									{@const im = Math.sin(
-										-(
-											(columns[x] * columns[focus.x]) /
+										dir *
+											((x * columns[focus.x]) /
 												other.width +
-											(rows[y] * rows[focus.y]) /
-												other.height
-										) *
+												(y * rows[focus.y]) /
+													other.height) *
 											2 *
 											Math.PI +
 											other.phases[
@@ -1200,7 +1311,22 @@
 {/snippet}
 
 {#snippet showImage(img, focus, onclick)}
-	{@const max = Math.max(0.1, ...image.mags) || 1}
+	<label class="slider">
+		<span
+			class="slider-label"
+			onclick={(e) => {
+				img.rescale = 0;
+			}}>Gamma: ({numf.format(img.rescale)})</span
+		>
+		<input
+			class="slider-control"
+			type="range"
+			bind:value={img.rescale}
+			step="0.1"
+			min="-6"
+			max="6"
+		/>
+	</label>
 	{#if polar}
 		{#if splitView}
 			<div class="domain-split">
@@ -1223,7 +1349,10 @@
 									width="1"
 									height="1"
 									fill="hsl(0,0%,{100 *
-										img.mags[y * img.width + x]}%)"
+										gamma(
+											img.mags[y * img.width + x],
+											img.rescale,
+										)}%)"
 									stroke="gray"
 									stroke-width="0.1"
 									onclick={(e) => onclick({ x: xi, y: yi })}
@@ -1353,7 +1482,10 @@
 						{#each columns as x, xi (xi)}
 							<path
 								fill="hsl(0,0%,{100 *
-									img.mags[y * img.width + x]}%)"
+									gamma(
+										img.mags[y * img.width + x],
+										img.rescale,
+									)}%)"
 								stroke="none"
 								d="m{xi} {yi} h 1 v 1 h-0.4 l -0.6,-0.6 z"
 								pointer-events="none"
@@ -1449,7 +1581,8 @@
 								y={yi}
 								width="1"
 								height="1"
-								fill="hsl(0,0%,{50 + 50 * re}%)"
+								fill="hsl(0,0%,{50 +
+									50 * gamma(re, img.rescale)}%)"
 								stroke="gray"
 								stroke-width="0.1"
 								onclick={(e) => onclick({ x: xi, y: yi })}
@@ -1516,7 +1649,8 @@
 								y={yi}
 								width="1"
 								height="1"
-								fill="hsl(0,0%,{50 + 50 * im}%)"
+								fill="hsl(0,0%,{50 +
+									50 * gamma(im, img.rescale)}%)"
 								stroke="gray"
 								stroke-width="0.1"
 								onclick={(e) => onclick({ x: xi, y: yi })}
@@ -1582,13 +1716,13 @@
 							img.mags[y * img.width + x] *
 							Math.sin(img.phases[y * img.width + x])}
 						<path
-							fill="hsl(0,0%,{50 + 50 * re}%)"
+							fill="hsl(0,0%,{50 + 50 * gamma(re, img.rescale)}%)"
 							stroke="none"
 							d="m{xi} {yi} h 1 v 1 h-1 z"
 							pointer-events="none"
 						></path>
 						<path
-							fill="hsl(0,0%,{50 + 50 * im}%)"
+							fill="hsl(0,0%,{50 + 50 * gamma(im, img.rescale)}%)"
 							stroke="none"
 							d="m{xi} {yi} v 1 h 1 z"
 							pointer-events="none"
@@ -1655,6 +1789,32 @@
 		font-family: monospace;
 	}
 
+	h1 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1ex;
+	}
+
+	.icon-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1ex;
+		color: inherit;
+	}
+	footer {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1ex;
+	}
+
+	.icon {
+		width: 1em;
+		height: 1em;
+	}
+
 	svg {
 		display: block;
 		width: 100%;
@@ -1671,6 +1831,24 @@
 	.focus {
 		stroke-width: 2px;
 		vector-effect: non-scaling-stroke;
+	}
+
+	.slider {
+		display: flex;
+		align-items: center;
+		accent-color: black;
+		justify-content: stretch;
+		width: 100%;
+		gap: 1ex;
+	}
+
+	.slider-label {
+		white-space: nowrap;
+		width: 10em;
+	}
+
+	.slider-control {
+		flex-grow: 1;
 	}
 
 	.number-slider {
@@ -1713,9 +1891,6 @@
 		background: #000;
 	}
 
-	h1 {
-		text-align: center;
-	}
 	h2 {
 		text-align: center;
 	}
@@ -1893,7 +2068,7 @@
 		vector-effect: non-scaling-stroke;
 	}
 	.polar-control-axis-label {
-		font-size: 0.5em;
+		font-size: 1em;
 	}
 	.polar-control-head {
 		vector-effect: non-scaling-stroke;
@@ -1934,6 +2109,6 @@
 	}
 
 	.polar-control-axis-value {
-		font-size: 0.5em;
+		font-size: 1em;
 	}
 </style>
