@@ -1,7 +1,8 @@
 <script>
 	import { untrack, tick, onMount } from "svelte";
 
-	import pokemon from "./examples.png";
+	import exampleFile from "./examples.png";
+	import exampleLicense from "./eaxmples.license.txt?raw";
 
 	const numf = new Intl.NumberFormat("en-US", {
 		maximumFractionDigits: 2,
@@ -77,7 +78,7 @@
 
 			examples = exs;
 		};
-		poke.src = pokemon;
+		poke.src = exampleFile;
 	});
 
 	const w = 16;
@@ -332,7 +333,16 @@
 <h1>2D Discrete Fourier Transform</h1>
 
 <fieldset class="options">
-	<legend> Examples </legend>
+	<legend
+		><div>
+			<details>
+				<summary>Examples (CC BY 4.0)</summary>
+				<div class="details-body">
+					{@html exampleLicense}
+				</div>
+			</details>
+		</div></legend
+	>
 
 	<div class="button-row">
 		{#each examples as ex, i (i)}
@@ -1762,6 +1772,18 @@
 		display: flex;
 		align-items: center;
 		gap: 2ex;
+	}
+
+	legend :global(a) {
+		color: inherit;
+	}
+
+	.details-body {
+		padding: 0 2ex;
+	}
+
+	summary {
+		cursor: pointer;
 	}
 
 	input[type="range"] {
