@@ -112,8 +112,8 @@
 
 		if (
 			sym &&
-			rows[subject.height - y] != rows[y] &&
-			rows[subject.width - x] != rows[x]
+			(rows[subject.height - y] != rows[y] ||
+				rows[subject.width - x] != rows[x])
 		) {
 			subject.mags[
 				rows[subject.height - y] * subject.width +
@@ -419,7 +419,8 @@
 		{@render slider(
 			image,
 			spectrum,
-			focus.type == "spatial" ? focus : null,
+			focus.type == "spatial",
+			focus,
 			1,
 			() => {
 				focus = {
@@ -478,7 +479,8 @@
 		{@render slider(
 			spectrum,
 			image,
-			focus.type == "frequency" ? focus : null,
+			focus.type == "frequency",
+			focus,
 			-1,
 			() => {
 				focus = {
@@ -491,8 +493,8 @@
 	</div>
 </div>
 
-{#snippet slider(img, other, focus, dir, flipFocus)}
-	{#if focus}
+{#snippet slider(img, other, active, focus, dir, flipFocus)}
+	{#if active}
 		{@const re =
 			img.mags[rows[focus.y] * img.width + columns[focus.x]] *
 			Math.cos(img.phases[rows[focus.y] * img.width + columns[focus.x]])}
@@ -956,9 +958,11 @@
 								const newRe = svgGlobal.x / 100;
 								const newIm = -svgGlobal.y / 100;
 
-								const newMag = Math.hypot(newRe, newIm);
+								const newMag = Math.min(
+									1,
+									Math.hypot(newRe, newIm),
+								);
 								const newPhase = Math.atan2(newIm, newRe);
-
 								setPolar(
 									img,
 									focus.x,
@@ -973,6 +977,53 @@
 					/>
 				</svg>
 			{/if}
+		</fieldset>
+	{:else}
+		<fieldset>
+			<legend style="height: 2.1em;">Preview Selected Frequency</legend>
+
+			<figure class="plot">
+				<svg class="plot-graphic" {viewBox}>
+					<rect
+						x="0"
+						y="0"
+						width={other.width}
+						height={other.height}
+						fill="black"
+					/>
+					{#each rows as y, yi (yi)}
+						{#each columns as x, xi (xi)}
+							<rect
+								tabindex="-1"
+								role="button"
+								x={xi}
+								y={yi}
+								width="1"
+								height="1"
+								fill="hsl(200, {70 *
+									other.mags[
+										rows[focus.y] * other.width +
+											columns[focus.x]
+									]}%, {Math.abs(
+									Math.cos(
+										((columns[x] * columns[focus.x]) /
+											other.width +
+											(rows[y] * rows[focus.y]) /
+												other.height) *
+											2 *
+											Math.PI -
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									),
+								) * 50}%)"
+								stroke="gray"
+								stroke-width="0.1"
+							></rect>{/each}
+					{/each}
+				</svg>
+			</figure>
 		</fieldset>
 	{/if}
 {/snippet}
