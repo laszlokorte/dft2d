@@ -1,7 +1,7 @@
 <script>
 	import { untrack, tick, onMount } from "svelte";
 
-	import pokemon from "./pokemon.png";
+	import pokemon from "./examples.png";
 
 	const numf = new Intl.NumberFormat("en-US", {
 		maximumFractionDigits: 2,
@@ -11,9 +11,9 @@
 
 	let splitView = $state(true);
 	let keepSymmetric = $state(true);
-	let coordinates = $state("polar");
+	let coordinates = $state("cartesian");
 	let sliderStyle = $state("plane");
-	let examples = $state("plane");
+	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
 
 	onMount(() => {
@@ -29,37 +29,49 @@
 			const width = poke.width;
 			const height = poke.height;
 
-			for (let row = 0; row < height; row += 166) {
-				for (let col = 0; col < width; col += 166) {
+			for (let row = 0; row < height; row += 16) {
+				for (let col = 0; col < width; col += 16) {
 					const example = {
 						mags: Array(16 * 16).fill(0),
 						phases: Array(16 * 16).fill(0),
 					};
-					const imgPixels = cnx.getImageData(col, row, 160, 160);
+					const imgPixels = cnx.getImageData(col, row, 16, 16);
 
 					for (let y = 0; y < 16; y += 1) {
 						for (let x = 0; x < 16; x += 1) {
-							const p = x * 4 * 10 + y * 4 * 10 * 10 * 16;
+							const p = x * 4 + y * 4 * 16;
 							const ri = p;
 							const gi = p + 1;
 							const bi = p + 2;
 							example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
-								(imgPixels.data[ri] +
-									imgPixels.data[gi] +
-									imgPixels.data[bi]) /
-								3 /
-								255;
+								Math.abs(
+									Math.round(
+										(Math.max(
+											imgPixels.data[ri],
+											imgPixels.data[gi],
+											imgPixels.data[bi],
+										) /
+											127) *
+											10,
+									) /
+										10 -
+										1,
+								);
+
+							example.phases[
+								((x + 8) % 16) + ((y + 8) % 16) * 16
+							] =
+								Math.max(
+									imgPixels.data[ri],
+									imgPixels.data[gi],
+									imgPixels.data[bi],
+								) < 127
+									? Math.PI
+									: 0;
 						}
 					}
 
 					exs.push(example);
-
-					if (exs.length > 5) {
-						break;
-					}
-				}
-				if (exs.length > 5) {
-					break;
 				}
 			}
 
@@ -86,6 +98,9 @@
 	});
 
 	let focus = $state({ type: "spatial", x: w / 2, y: h / 2 });
+	let focusMirror = $derived(
+		focus ? { x: (w - focus.x) % w, y: (h - focus.y) % h } : null,
+	);
 
 	const rows = $derived(
 		Array(image.height)
@@ -106,23 +121,31 @@
 		recalculate(spectrum, image, 1);
 	}
 
+	function xyMirrorIndex(subject, x, y) {
+		return (
+			rows[(subject.height - y) % subject.height] * subject.width +
+			columns[(subject.width - x) % subject.width]
+		);
+	}
+
+	function xyIndex(subject, x, y) {
+		return (
+			rows[y % subject.height] * subject.width +
+			columns[x % subject.width]
+		);
+	}
+
 	function setPolar(subject, x, y, newMag, newPhase, sym = false) {
-		subject.mags[rows[y] * subject.width + columns[x]] = newMag;
-		subject.phases[rows[y] * subject.width + columns[x]] = newPhase;
+		subject.mags[xyIndex(subject, x, y)] = newMag;
+		subject.phases[xyIndex(subject, x, y)] = newPhase;
 
 		if (
 			sym &&
 			(rows[subject.height - y] != rows[y] ||
 				rows[subject.width - x] != rows[x])
 		) {
-			subject.mags[
-				rows[subject.height - y] * subject.width +
-					columns[subject.width - x]
-			] = newMag;
-			subject.phases[
-				rows[subject.height - y] * subject.width +
-					columns[subject.width - x]
-			] = -newPhase;
+			subject.mags[xyMirrorIndex(subject, x, y)] = newMag;
+			subject.phases[xyMirrorIndex(subject, x, y)] = -newPhase;
 		}
 	}
 
@@ -132,8 +155,8 @@
 
 		for (let y = 0; y <= h; y++) {
 			for (let x = 0; x <= w; x++) {
-				subject.phases[y * w + x] = phase;
-				subject.mags[y * w + x] = mag;
+				subject.phases[xyIndex(subject, x, y)] = phase;
+				subject.mags[xyIndex(subject, x, y)] = mag;
 			}
 		}
 	}
@@ -144,7 +167,7 @@
 
 		for (let y = 0; y <= h; y++) {
 			for (let x = 0; x <= w; x++) {
-				subject.phases[y * w + x] = value;
+				subject.phases[xyIndex(subject, x, y)] = value;
 			}
 		}
 	}
@@ -155,8 +178,8 @@
 
 		for (let y = 0; y <= h; y++) {
 			for (let x = 0; x <= w; x++) {
-				const mag = subject.mags[y * w + x];
-				const pha = subject.phases[y * w + x];
+				const mag = subject.mags[xyIndex(subject, x, y)];
+				const pha = subject.phases[xyIndex(subject, x, y)];
 
 				const re = mag * Math.cos(pha);
 				const im = mag * Math.sin(pha);
@@ -167,8 +190,8 @@
 				const newMag = Math.hypot(newRe, newIm);
 				const newPhase = Math.atan2(newIm, newRe);
 
-				subject.mags[y * w + x] = newMag;
-				subject.phases[y * w + x] = newPhase;
+				subject.mags[xyIndex(subject, x, y)] = newMag;
+				subject.phases[xyIndex(subject, x, y)] = newPhase;
 			}
 		}
 	}
@@ -180,33 +203,22 @@
 		const newmags = Array(subject.mags.length).fill(0);
 		const newphases = Array(subject.mags.length).fill(0);
 
-		for (let y = 1; y < h; y++) {
-			for (let x = 1; x < w; x++) {
-				const magA = subject.mags[rows[y] * w + columns[x]];
-				const phaA = subject.phases[rows[y] * w + columns[x]];
+		for (let y = 0; y < h; y++) {
+			for (let x = 0; x < w; x++) {
+				const magA = subject.mags[xyIndex(subject, x, y)];
+				const phaA = subject.phases[xyIndex(subject, x, y)];
 
-				const magB =
-					subject.mags[
-						rows[rows.length - y] * w + columns[columns.length - x]
-					];
-				const phaB =
-					subject.phases[
-						rows[rows.length - y] * w + columns[columns.length - x]
-					];
+				const magB = subject.mags[xyMirrorIndex(subject, x, y)];
+				const phaB = subject.phases[xyMirrorIndex(subject, x, y)];
 
-				newmags[
-					rows[rows.length - y] * w + columns[columns.length - x]
-				] = Math.sqrt(magB * magB + magA * magA) / Math.sqrt(2);
-				newphases[
-					rows[rows.length - y] * w + columns[columns.length - x]
-				] = clipPi(
+				newmags[xyMirrorIndex(subject, x, y)] =
+					Math.sqrt(magB * magB + magA * magA) / Math.sqrt(2);
+				newphases[xyMirrorIndex(subject, x, y)] = clipPi(
 					Math.sign(phaB - phaA) *
 						Math.max(Math.abs(phaA), Math.abs(phaB)),
 				);
 			}
 		}
-
-		newphases[rows[h / 2] * w + columns[w / 2]] = 0;
 
 		subject.phases = newphases;
 		subject.mags = newmags;
@@ -320,6 +332,25 @@
 <h1>2D Discrete Fourier Transform</h1>
 
 <fieldset class="options">
+	<legend> Examples </legend>
+
+	<div class="button-row">
+		{#each examples as ex, i (i)}
+			<button
+				type="button"
+				class="button-light"
+				onclick={(evt) => {
+					if (evt.currentTarget.value) {
+						loadExample(ex);
+					}
+				}}
+				value={i}>Example #{i}</button
+			>
+		{/each}
+	</div>
+</fieldset>
+
+<fieldset class="options">
 	<legend> Options </legend>
 
 	<div class="radio-list">
@@ -328,19 +359,19 @@
 			><input
 				type="radio"
 				bind:group={coordinates}
-				value={"polar"}
+				value={"cartesian"}
 				class="radio-control"
 			/>
-			<span class="radio-label">Polar</span></label
+			<span class="radio-label">Cartesian</span></label
 		>
 		<label class="radio-field"
 			><input
 				type="radio"
 				bind:group={coordinates}
-				value={"cartesian"}
+				value={"polar"}
 				class="radio-control"
 			/>
-			<span class="radio-label">Cartesian</span></label
+			<span class="radio-label">Polar</span></label
 		>
 
 		<label class="checkbox-field"
@@ -353,21 +384,6 @@
 				>Split {polar ? "Magnitude/Phase" : "Real/Imaginary"}</span
 			>
 		</label>
-	</div>
-
-	<div>
-		<select
-			onchange={(evt) => {
-				if (evt.currentTarget.value) {
-					loadExample(examples[evt.currentTarget.value]);
-				}
-			}}
-		>
-			<option value="">Load Example</option>
-			{#each examples as ex, i (i)}
-				<option value={i}>Example #{i}</option>
-			{/each}
-		</select>
 	</div>
 </fieldset>
 
@@ -425,8 +441,8 @@
 			() => {
 				focus = {
 					type: "spatial",
-					x: spectrum.width - focus.x,
-					y: spectrum.height - focus.y,
+					x: focusMirror.x,
+					y: focusMirror.y,
 				};
 			},
 		)}
@@ -485,8 +501,8 @@
 			() => {
 				focus = {
 					type: "frequency",
-					x: spectrum.width - focus.x,
-					y: spectrum.height - focus.y,
+					x: focusMirror.x,
+					y: focusMirror.y,
 				};
 			},
 		)}
@@ -533,9 +549,26 @@
 						bind:checked={keepSymmetric}
 						class="radio-control"
 					/>
-					<span class="radio-label">Keep Symmetric</span></label
+					<span class="radio-label">Preserve Conjugate Symmetry</span
+					></label
 				>
+				<div class="radio-list-tail">
+					<button
+						type="button"
+						onclick={(e) => {
+							setPolar(
+								img,
+								focus.x,
+								focus.y,
+								0,
+								0,
+								keepSymmetric,
+							);
+						}}>Set to (0,0)</button
+					>
+				</div>
 			</div>
+			<hr />
 			{#if sliderStyle == "range"}
 				<div
 					class="number-slider"
@@ -622,7 +655,11 @@
 						]}
 						step="0.01"
 						oninput={(e) => {
-							if (keepSymmetric) {
+							if (
+								keepSymmetric &&
+								(img.height - focus.y !== focus.y ||
+									img.width - focus.x !== focus.x)
+							) {
 								img.phases[
 									rows[img.height - focus.y] * img.width +
 										columns[img.width - focus.x]
@@ -678,7 +715,11 @@
 								rows[focus.y] * img.width + columns[focus.x]
 							] = newPhase;
 
-							if (keepSymmetric) {
+							if (
+								keepSymmetric &&
+								(img.height - focus.y !== focus.y ||
+									img.width - focus.x !== focus.x)
+							) {
 								img.mags[
 									rows[img.height - focus.y] * img.width +
 										columns[img.width - focus.x]
@@ -734,7 +775,11 @@
 								rows[focus.y] * img.width + columns[focus.x]
 							] = newPhase;
 
-							if (keepSymmetric) {
+							if (
+								keepSymmetric &&
+								(img.height - focus.y !== focus.y ||
+									img.width - focus.x !== focus.x)
+							) {
 								img.mags[
 									rows[img.height - focus.y] * img.width +
 										columns[img.width - focus.x]
@@ -869,13 +914,13 @@
 						class="polar-control-axis-value">{numf.format(re)}</text
 					>
 
-					{#if keepSymmetric}
+					{#if keepSymmetric && (focusMirror.x !== focus.x || focusMirror.y !== focus.y)}
 						<line
-							class="polar-control-marker-magnitude"
+							class="polar-control-marker-magnitude-mirror"
 							x1="0"
 							y1="0"
 							x2={100 * re}
-							y2={-100 * im}
+							y2={100 * im}
 							stroke="#aaa"
 							stroke-width="1"
 							stroke-dasharray="1 1"
@@ -981,49 +1026,165 @@
 	{:else}
 		<fieldset>
 			<legend style="height: 2.1em;">Preview Selected Frequency</legend>
-
-			<figure class="plot">
-				<svg class="plot-graphic" {viewBox}>
-					<rect
-						x="0"
-						y="0"
-						width={other.width}
-						height={other.height}
-						fill="black"
-					/>
-					{#each rows as y, yi (yi)}
-						{#each columns as x, xi (xi)}
+			{#if splitView}
+				<div class="domain-split">
+					<figure class="plot">
+						<svg class="plot-graphic" {viewBox}>
 							<rect
-								tabindex="-1"
-								role="button"
-								x={xi}
-								y={yi}
-								width="1"
-								height="1"
-								fill="hsl(200, {70 *
-									other.mags[
-										rows[focus.y] * other.width +
-											columns[focus.x]
-									]}%, {Math.abs(
-									Math.cos(
-										((columns[x] * columns[focus.x]) /
-											other.width +
+								x="0"
+								y="0"
+								width={other.width}
+								height={other.height}
+								fill="black"
+							/>
+							{#each rows as y, yi (yi)}
+								{#each columns as x, xi (xi)}
+									{@const re = Math.cos(
+										-(
+											(columns[x] * columns[focus.x]) /
+												other.width +
 											(rows[y] * rows[focus.y]) /
-												other.height) *
+												other.height
+										) *
 											2 *
-											Math.PI -
+											Math.PI +
 											other.phases[
 												rows[focus.y] * other.width +
 													columns[focus.x]
 											],
-									),
-								) * 50}%)"
-								stroke="gray"
-								stroke-width="0.1"
-							></rect>{/each}
-					{/each}
-				</svg>
-			</figure>
+									)}
+
+									{@const im = Math.sin(
+										-(
+											(columns[x] * columns[focus.x]) /
+												other.width +
+											(rows[y] * rows[focus.y]) /
+												other.height
+										) *
+											2 *
+											Math.PI +
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									)}
+									{@const mag = Math.hypot(re, im)}
+									{@const phase = Math.atan2(im, re)}
+									{@const sat =
+										coordinates === "cartesian"
+											? other.mags[
+													rows[focus.y] *
+														other.width +
+														columns[focus.x]
+												]
+											: 0}
+									{@const light =
+										coordinates === "cartesian"
+											? 60 + re * 25
+											: other.mags[
+													rows[focus.y] *
+														other.width +
+														columns[focus.x]
+												] * 100}
+									{@const hue = 200}
+									<rect
+										tabindex="-1"
+										role="button"
+										x={xi}
+										y={yi}
+										width="1"
+										height="1"
+										fill="hsl({hue}, {70 * sat}%, {light}%)"
+										stroke="gray"
+										stroke-width="0.1"
+									></rect>{/each}
+							{/each}
+						</svg>
+						<figcaption class="plot-caption">
+							{coordinates === "cartesian" ? "Real" : "Magnitude"}
+						</figcaption>
+					</figure>
+
+					<figure class="plot">
+						<svg class="plot-graphic" {viewBox}>
+							<rect
+								x="0"
+								y="0"
+								width={other.width}
+								height={other.height}
+								fill="black"
+							/>
+							{#each rows as y, yi (yi)}
+								{#each columns as x, xi (xi)}
+									{@const re = Math.cos(
+										-(
+											(columns[x] * columns[focus.x]) /
+												other.width +
+											(rows[y] * rows[focus.y]) /
+												other.height
+										) *
+											2 *
+											Math.PI +
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									)}
+
+									{@const im = Math.sin(
+										-(
+											(columns[x] * columns[focus.x]) /
+												other.width +
+											(rows[y] * rows[focus.y]) /
+												other.height
+										) *
+											2 *
+											Math.PI +
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									)}
+									{@const mag = Math.hypot(re, im)}
+									{@const phase = Math.atan2(im, re)}
+									{@const sat =
+										coordinates === "cartesian"
+											? 70 *
+												other.mags[
+													rows[focus.y] *
+														other.width +
+														columns[focus.x]
+												]
+											: 100}
+									{@const light =
+										coordinates === "cartesian"
+											? 60 + im * 25
+											: 50}
+									{@const hue =
+										coordinates === "cartesian"
+											? 200
+											: 180 + (phase * 180) / Math.PI}
+									<rect
+										tabindex="-1"
+										role="button"
+										x={xi}
+										y={yi}
+										width="1"
+										height="1"
+										fill="hsl({hue}, {sat}%, {light}%)"
+										stroke="gray"
+										stroke-width="0.1"
+									></rect>{/each}
+							{/each}
+						</svg>
+						<figcaption class="plot-caption">
+							{coordinates === "cartesian"
+								? "Imaginary"
+								: "Phase"}
+						</figcaption>
+					</figure>
+				</div>
+			{:else}{/if}
 		</fieldset>
 	{/if}
 {/snippet}
@@ -1062,17 +1223,6 @@
 								></rect>
 							{/each}
 						{/each}
-
-						<circle
-							pointer-events="none"
-							fill="none"
-							r="0.2"
-							stroke="cyan"
-							stroke-width="0.1"
-							cx={columns[0] + 0.5}
-							cy={rows[0] + 0.5}
-						/>
-
 						{#if focus}
 							<rect
 								pointer-events="none"
@@ -1086,7 +1236,26 @@
 								rx="0.2"
 								ry="0.2"
 							/>
+
+							<circle
+								pointer-events="none"
+								cx={focusMirror.x + 0.5}
+								cy={focusMirror.y + 0.5}
+								r="0.15"
+								fill="magenta"
+								class="focus-mirror"
+							/>
 						{/if}
+
+						<circle
+							pointer-events="none"
+							fill="none"
+							r="0.2"
+							stroke="cyan"
+							stroke-width="0.1"
+							cx={columns[0] + 0.5}
+							cy={rows[0] + 0.5}
+						/>
 					</svg>
 
 					<figcaption class="plot-caption">Magnitude</figcaption>
@@ -1124,16 +1293,6 @@
 							{/each}
 						{/each}
 
-						<circle
-							pointer-events="none"
-							fill="none"
-							r="0.2"
-							stroke="cyan"
-							stroke-width="0.1"
-							cx={columns[0] + 0.5}
-							cy={rows[0] + 0.5}
-						/>
-
 						{#if focus}
 							<rect
 								pointer-events="none"
@@ -1147,7 +1306,25 @@
 								rx="0.2"
 								ry="0.2"
 							/>
+
+							<circle
+								pointer-events="none"
+								cx={focusMirror.x + 0.5}
+								cy={focusMirror.y + 0.5}
+								r="0.15"
+								fill="magenta"
+								class="focus-mirror"
+							/>
 						{/if}
+						<circle
+							pointer-events="none"
+							fill="none"
+							r="0.2"
+							stroke="cyan"
+							stroke-width="0.1"
+							cx={columns[0] + 0.5}
+							cy={rows[0] + 0.5}
+						/>
 					</svg>
 					<figcaption class="plot-caption">Phase</figcaption>
 				</figure>
@@ -1202,16 +1379,6 @@
 						{/each}
 					{/each}
 
-					<circle
-						pointer-events="none"
-						fill="none"
-						r="0.2"
-						stroke="cyan"
-						stroke-width="0.1"
-						cx={columns[0] + 0.5}
-						cy={rows[0] + 0.5}
-					/>
-
 					{#if focus}
 						<rect
 							pointer-events="none"
@@ -1225,7 +1392,25 @@
 							rx="0.2"
 							ry="0.2"
 						/>
+						<circle
+							pointer-events="none"
+							cx={focusMirror.x + 0.5}
+							cy={focusMirror.y + 0.5}
+							r="0.15"
+							fill="magenta"
+							class="focus-mirror"
+						/>
 					{/if}
+
+					<circle
+						pointer-events="none"
+						fill="none"
+						r="0.2"
+						stroke="cyan"
+						stroke-width="0.1"
+						cx={columns[0] + 0.5}
+						cy={rows[0] + 0.5}
+					/>
 				</svg>
 
 				<figcaption class="plot-caption">Magnitude/Phase</figcaption>
@@ -1265,16 +1450,6 @@
 						{/each}
 					{/each}
 
-					<circle
-						pointer-events="none"
-						fill="none"
-						r="0.2"
-						stroke="cyan"
-						stroke-width="0.1"
-						cx={columns[0] + 0.5}
-						cy={rows[0] + 0.5}
-					/>
-
 					{#if focus}
 						<rect
 							pointer-events="none"
@@ -1288,7 +1463,24 @@
 							rx="0.2"
 							ry="0.2"
 						/>
+						<circle
+							pointer-events="none"
+							cx={focusMirror.x + 0.5}
+							cy={focusMirror.y + 0.5}
+							r="0.15"
+							fill="magenta"
+							class="focus-mirror"
+						/>
 					{/if}
+					<circle
+						pointer-events="none"
+						fill="none"
+						r="0.2"
+						stroke="cyan"
+						stroke-width="0.1"
+						cx={columns[0] + 0.5}
+						cy={rows[0] + 0.5}
+					/>
 				</svg>
 				<figcaption class="plot-caption">Real</figcaption>
 			</figure>
@@ -1325,16 +1517,6 @@
 						{/each}
 					{/each}
 
-					<circle
-						pointer-events="none"
-						fill="none"
-						r="0.2"
-						stroke="cyan"
-						stroke-width="0.1"
-						cx={columns[0] + 0.5}
-						cy={rows[0] + 0.5}
-					/>
-
 					{#if focus}
 						<rect
 							pointer-events="none"
@@ -1348,7 +1530,24 @@
 							rx="0.2"
 							ry="0.2"
 						/>
+						<circle
+							pointer-events="none"
+							cx={focusMirror.x + 0.5}
+							cy={focusMirror.y + 0.5}
+							r="0.15"
+							fill="magenta"
+							class="focus-mirror"
+						/>
 					{/if}
+					<circle
+						pointer-events="none"
+						fill="none"
+						r="0.2"
+						stroke="cyan"
+						stroke-width="0.1"
+						cx={columns[0] + 0.5}
+						cy={rows[0] + 0.5}
+					/>
 				</svg>
 				<figcaption class="plot-caption">Imaginary</figcaption>
 			</figure>
@@ -1403,16 +1602,6 @@
 					{/each}
 				{/each}
 
-				<circle
-					pointer-events="none"
-					fill="none"
-					r="0.2"
-					stroke="cyan"
-					stroke-width="0.1"
-					cx={columns[0] + 0.5}
-					cy={rows[0] + 0.5}
-				/>
-
 				{#if focus}
 					<rect
 						pointer-events="none"
@@ -1426,7 +1615,25 @@
 						rx="0.2"
 						ry="0.2"
 					/>
+					<circle
+						pointer-events="none"
+						cx={focusMirror.x + 0.5}
+						cy={focusMirror.y + 0.5}
+						r="0.15"
+						fill="magenta"
+						class="focus-mirror"
+					/>
 				{/if}
+
+				<circle
+					pointer-events="none"
+					fill="none"
+					r="0.2"
+					stroke="cyan"
+					stroke-width="0.1"
+					cx={columns[0] + 0.5}
+					cy={rows[0] + 0.5}
+				/>
 			</svg>
 			<figcaption class="plot-caption">Real/Imaginary</figcaption>
 		</figure>
@@ -1489,6 +1696,7 @@
 
 	button:hover {
 		background: #252525;
+		color: #fff;
 	}
 
 	button:active {
@@ -1566,6 +1774,16 @@
 		gap: 0.5ex;
 	}
 
+	.button-row-head {
+		padding: 1ex;
+		align-self: center;
+	}
+
+	.button-light {
+		background: none;
+		color: DodgerBlue;
+	}
+
 	.plot {
 		margin: 0;
 		padding: 0;
@@ -1601,6 +1819,11 @@
 		display: block;
 		align-self: center;
 		padding: 1ex;
+	}
+
+	.radio-list-tail {
+		justify-self: end;
+		margin-left: auto;
 	}
 
 	.radio-list-head::after {
@@ -1677,6 +1900,11 @@
 	.polar-control-marker-imag {
 		vector-effect: non-scaling-stroke;
 		stroke-dasharray: 2 3;
+	}
+
+	.polar-control-marker-magnitude-mirror {
+		vector-effect: non-scaling-stroke;
+		stroke-dasharray: 2 10;
 	}
 
 	.polar-control-axis-value.hidden {
