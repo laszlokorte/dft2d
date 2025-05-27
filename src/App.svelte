@@ -13,6 +13,7 @@
 	let splitView = $state(true);
 	let keepSymmetric = $state(true);
 	let coordinates = $state("cartesian");
+	let loadFormat = $state("cartesian");
 	let sliderStyle = $state("plane");
 	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
@@ -38,49 +39,11 @@
 			const width = poke.width;
 			const height = poke.height;
 
-			for (let row = 0; row < height; row += 16) {
-				for (let col = 0; col < width; col += 16) {
-					const example = {
-						mags: Array(16 * 16).fill(0),
-						phases: Array(16 * 16).fill(0),
-					};
+			for (let col = 0; col < width; col += 16) {
+				for (let row = 0; row < height; row += 16) {
 					const imgPixels = cnx.getImageData(col, row, 16, 16);
 
-					for (let y = 0; y < 16; y += 1) {
-						for (let x = 0; x < 16; x += 1) {
-							const p = x * 4 + y * 4 * 16;
-							const ri = p;
-							const gi = p + 1;
-							const bi = p + 2;
-							example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
-								Math.abs(
-									Math.round(
-										(Math.max(
-											imgPixels.data[ri],
-											imgPixels.data[gi],
-											imgPixels.data[bi],
-										) /
-											127) *
-											10,
-									) /
-										10 -
-										1,
-								);
-
-							example.phases[
-								((x + 8) % 16) + ((y + 8) % 16) * 16
-							] =
-								Math.max(
-									imgPixels.data[ri],
-									imgPixels.data[gi],
-									imgPixels.data[bi],
-								) < 127
-									? Math.PI
-									: 0;
-						}
-					}
-
-					exs.push(example);
+					exs.push(imgPixels);
 				}
 			}
 
@@ -125,7 +88,60 @@
 	);
 	const viewBox = `-0.2 -0.2 ${image.width + 0.4} ${image.height + 0.4}`;
 
-	function loadExample(example) {
+	function loadExample(imgPixels, format) {
+		const example = {
+			mags: Array(16 * 16).fill(0),
+			phases: Array(16 * 16).fill(0),
+		};
+
+		for (let y = 0; y < 16; y += 1) {
+			for (let x = 0; x < 16; x += 1) {
+				const p = x * 4 + y * 4 * 16;
+				const ri = p;
+				const gi = p + 1;
+				const bi = p + 2;
+				if (format === "polar") {
+					example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
+						Math.abs(
+							Math.round(
+								(Math.max(
+									imgPixels.data[ri],
+									imgPixels.data[gi],
+									imgPixels.data[bi],
+								) /
+									255) *
+									10,
+							) / 10,
+						);
+
+					example.phases[((x + 8) % 16) + ((y + 8) % 16) * 16] = 0;
+				} else if (format === "cartesian") {
+					example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
+						Math.abs(
+							Math.round(
+								(Math.max(
+									imgPixels.data[ri],
+									imgPixels.data[gi],
+									imgPixels.data[bi],
+								) /
+									127) *
+									10,
+							) /
+								10 -
+								1,
+						);
+					example.phases[((x + 8) % 16) + ((y + 8) % 16) * 16] =
+						Math.max(
+							imgPixels.data[ri],
+							imgPixels.data[gi],
+							imgPixels.data[bi],
+						) < 127
+							? Math.PI
+							: 0;
+				}
+			}
+		}
+
 		image.mags = example.mags;
 		image.phases = example.phases;
 
@@ -406,22 +422,46 @@
 					{@html exampleLicense}
 				</div>
 			</details>
-		</div></legend
-	>
+		</div>
+	</legend>
 
-	<div class="button-row">
-		{#each examples as ex, i (i)}
-			<button
-				type="button"
-				class="button-light"
-				onclick={(evt) => {
+	<div class="radio-list">
+		<div class="radio-list-head">Load as</div>
+		<label class="radio-field"
+			><input
+				type="radio"
+				bind:group={loadFormat}
+				value={"polar"}
+				class="radio-control"
+			/>
+			<span class="radio-label">Magnitude</span></label
+		>
+		<label class="radio-field"
+			><input
+				type="radio"
+				bind:group={loadFormat}
+				value={"cartesian"}
+				class="radio-control"
+			/>
+			<span class="radio-label">Real</span></label
+		>
+		<div class="button-row">
+			<select
+				oninput={(evt) => {
 					if (evt.currentTarget.value) {
-						loadExample(ex);
+						loadExample(
+							examples[evt.currentTarget.value],
+							loadFormat,
+						);
 					}
 				}}
-				value={i}>Example #{i}</button
 			>
-		{/each}
+				<option value="">---</option>
+				{#each examples as ex, i (i)}
+					<option value={i}>Example #{i}</option>
+				{/each}
+			</select>
+		</div>
 	</div>
 </fieldset>
 
