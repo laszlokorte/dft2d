@@ -2,6 +2,7 @@
 	import { untrack, tick, onMount } from "svelte";
 
 	import exampleFile from "./examples.png";
+	import exampleNames from "./examples.names.txt?raw";
 	import exampleLicense from "./eaxmples.license.txt?raw";
 
 	const numf = new Intl.NumberFormat("en-US", {
@@ -12,8 +13,8 @@
 
 	let splitView = $state(true);
 	let keepSymmetric = $state(true);
-	let coordinates = $state("cartesian");
-	let loadFormat = $state("cartesian");
+	let coordinates = $state("polar");
+	let loadFormat = $state("polar");
 	let sliderStyle = $state("plane");
 	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
@@ -30,6 +31,10 @@
 		const exs = [];
 		const poke = new Image();
 		poke.onload = (evt) => {
+			const names = exampleNames
+				.trim()
+				.split("\n")
+				.map((l) => l.trim().split(";"));
 			const cnv = document.createElement("canvas");
 			cnv.width = poke.width;
 			cnv.height = poke.height;
@@ -43,7 +48,10 @@
 				for (let row = 0; row < height; row += 16) {
 					const imgPixels = cnx.getImageData(col, row, 16, 16);
 
-					exs.push(imgPixels);
+					exs.push({
+						data: imgPixels,
+						name: names[row / 16][col / 16],
+					});
 				}
 			}
 
@@ -425,44 +433,54 @@
 		</div>
 	</legend>
 
-	<div class="radio-list">
-		<div class="radio-list-head">Load as</div>
-		<label class="radio-field"
-			><input
-				type="radio"
-				bind:group={loadFormat}
-				value={"polar"}
-				class="radio-control"
-			/>
-			<span class="radio-label">Magnitude</span></label
-		>
-		<label class="radio-field"
-			><input
-				type="radio"
-				bind:group={loadFormat}
-				value={"cartesian"}
-				class="radio-control"
-			/>
-			<span class="radio-label">Real</span></label
-		>
-		<div class="button-row">
-			<select
-				oninput={(evt) => {
-					if (evt.currentTarget.value) {
-						loadExample(
-							examples[evt.currentTarget.value],
-							loadFormat,
-						);
-					}
-				}}
+	<form
+		onsubmit={(evt) => {
+			evt.preventDefault();
+			const { example } = Object.fromEntries(
+				new FormData(evt.currentTarget),
+			);
+			if (example) {
+				loadExample(examples[example].data, loadFormat);
+			}
+		}}
+	>
+		<div class="radio-list">
+			<div class="radio-list-head">Load as</div>
+			<label class="radio-field"
+				><input
+					type="radio"
+					bind:group={loadFormat}
+					value={"polar"}
+					class="radio-control"
+				/>
+				<span class="radio-label">Magnitude</span></label
 			>
-				<option value="">---</option>
-				{#each examples as ex, i (i)}
-					<option value={i}>Example #{i}</option>
-				{/each}
-			</select>
+			<label class="radio-field"
+				><input
+					type="radio"
+					bind:group={loadFormat}
+					value={"cartesian"}
+					class="radio-control"
+				/>
+				<span class="radio-label">Real</span></label
+			>
+			<div class="button-row">
+				<select
+					name="example"
+					onchange={(e) => {
+						e.currentTarget.nextElementSibling.click();
+					}}
+				>
+					<option value="">---</option>
+					{#each examples as ex, i (i)}
+						<option value={i}>{ex.name}</option>
+					{/each}
+				</select>
+
+				<button type="submit">Reload</button>
+			</div>
 		</div>
-	</div>
+	</form>
 </fieldset>
 
 <fieldset class="options">

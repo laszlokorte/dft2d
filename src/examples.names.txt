@@ -1,0 +1,10 @@
+Arrow;Rect Vertical;Double Slit #2
+Book;Rect Horizontal;Double Slit #3
+Bow #1;Line Vertical;Double Slit #4
+Bow #2;Line Horizontal;Double Slit #5
+Bow #3;Circle Big;Double Slit #6
+Candy;Circle Small;Double Slit #7
+Coins;Gaussian Big;Double Slit #8
+Diamond #1;Gaussian Small;Double Slit #9
+Diamond #2;Pixel;Double Slit #10
+Drawer;Double Slit #1;Double Slit #11
