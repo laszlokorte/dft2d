@@ -1363,7 +1363,117 @@
 						</figcaption>
 					</figure>
 				</div>
-			{:else}{/if}
+			{:else}
+				<figure class="plot">
+					<svg class="plot-graphic" {viewBox}>
+						<rect
+							x="0"
+							y="0"
+							width={other.width}
+							height={other.height}
+							fill="black"
+						/>
+						{#each rows as y, yi (yi)}
+							{#each columns as x, xi (xi)}
+								{@const re = Math.cos(
+									dir *
+										(1 +
+											(x * columns[focus.x]) /
+												other.width +
+											(y * rows[focus.y]) /
+												other.height) *
+										2 *
+										Math.PI +
+										other.phases[
+											rows[focus.y] * other.width +
+												columns[focus.x]
+										],
+								)}
+
+								{@const im = Math.sin(
+									dir *
+										(1 +
+											(x * columns[focus.x]) /
+												other.width +
+											(y * rows[focus.y]) /
+												other.height) *
+										2 *
+										Math.PI +
+										other.phases[
+											rows[focus.y] * other.width +
+												columns[focus.x]
+										],
+								)}
+								{@const mag = Math.hypot(re, im)}
+								{@const phase = Math.atan2(im, re)}
+
+								{#if coordinates == "cartesian"}
+									{@const sat =
+										other.mags[
+											rows[focus.y] * other.width +
+												columns[focus.x]
+										]}
+									{@const light = 60 + re * 25}
+									{@const hue = 200}
+
+									{@const sat2 =
+										70 *
+										other.mags[
+											rows[focus.y] * other.width +
+												columns[focus.x]
+										]}
+									{@const light2 = 60 + im * 25}
+									{@const hue2 = 200}
+
+									<path
+										fill="hsl({hue}, {70 * sat}%, {light}%)"
+										stroke="none"
+										d="m{xi} {yi} h 1 v 1 h-1 z"
+										pointer-events="none"
+									></path>
+									<path
+										fill="hsl({hue2}, {sat2}%, {light2}%)"
+										stroke="none"
+										d="m{xi} {yi} v 1 h 1 z"
+										pointer-events="none"
+									></path>
+								{:else}
+									{@const sat = 0}
+									{@const light =
+										other.mags[
+											rows[focus.y] * other.width +
+												columns[focus.x]
+										] * 100}
+									{@const hue = 200}
+
+									{@const sat2 = 100}
+									{@const light2 = 50}
+									{@const hue2 =
+										180 + (phase * 180) / Math.PI}
+
+									<path
+										fill="hsl({hue}, {70 * sat}%, {light}%)"
+										stroke="none"
+										d="m{xi} {yi} h 1 v 1 h-0.4 l -0.6,-0.6 z"
+										pointer-events="none"
+									></path>
+									<path
+										fill="hsl({hue2}, {sat2}%, {light2}%)"
+										stroke="none"
+										d="m{xi} {yi} m0,0.4 v 0.6 h 0.6 z"
+										pointer-events="none"
+									></path>
+								{/if}
+							{/each}
+						{/each}
+					</svg>
+					<figcaption class="plot-caption">
+						{coordinates === "cartesian"
+							? "Real/Imaginary"
+							: "Magnitude/Phase"}
+					</figcaption>
+				</figure>
+			{/if}
 		</fieldset>
 	{/if}
 {/snippet}
