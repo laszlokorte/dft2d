@@ -111,30 +111,24 @@
 				if (format === "polar") {
 					example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
 						Math.abs(
-							Math.round(
-								(Math.max(
-									imgPixels.data[ri],
-									imgPixels.data[gi],
-									imgPixels.data[bi],
-								) /
-									255) *
-									10,
-							) / 10,
+							Math.max(
+								imgPixels.data[ri],
+								imgPixels.data[gi],
+								imgPixels.data[bi],
+							) / 255,
 						);
 
 					example.phases[((x + 8) % 16) + ((y + 8) % 16) * 16] = 0;
 				} else if (format === "cartesian") {
 					example.mags[((x + 8) % 16) + ((y + 8) % 16) * 16] =
 						Math.abs(
-							Math.round(
-								(Math.max(
-									imgPixels.data[ri],
-									imgPixels.data[gi],
-									imgPixels.data[bi],
-								) /
-									127) *
-									10,
+							((Math.max(
+								imgPixels.data[ri],
+								imgPixels.data[gi],
+								imgPixels.data[bi],
 							) /
+								127) *
+								10) /
 								10 -
 								1,
 						);
@@ -176,8 +170,8 @@
 
 		if (
 			sym &&
-			(rows[subject.height - y] != rows[y] ||
-				rows[subject.width - x] != rows[x])
+			(rows[(subject.height - y) % subject.height] != rows[y] ||
+				columns[(subject.width - x) % subject.width] != columns[x])
 		) {
 			subject.mags[xyMirrorIndex(subject, x, y)] = newMag;
 			subject.phases[xyMirrorIndex(subject, x, y)] = -newPhase;
@@ -440,7 +434,39 @@
 				new FormData(evt.currentTarget),
 			);
 			if (example) {
-				loadExample(examples[example].data, loadFormat);
+				if (example == 16) {
+					const data = Array(16 * 16 * 4).fill(255);
+					for (let x = 0; x < 16; x++) {
+						for (let y = 0; y < 16; y++) {
+							const d =
+								Math.hypot(8 - x, 8 - y) /
+								Math.PI /
+								Math.sqrt(2);
+							const val = Math.exp(-Math.pow(d, 2)) * 255;
+							data[x * 4 + 16 * y * 4 + 0] = val;
+							data[x * 4 + 16 * y * 4 + 1] = val;
+							data[x * 4 + 16 * y * 4 + 2] = val;
+							data[x * 4 + 16 * y * 4 + 3] = val;
+						}
+					}
+
+					loadExample({ data, width: 16, height: 16 }, loadFormat);
+				} else if (example == 17) {
+					const data = Array(16 * 16 * 4).fill(255);
+					for (let x = 0; x < 16; x++) {
+						for (let y = 0; y < 16; y++) {
+							const d = Math.hypot(8 - x, 8 - y) / Math.PI;
+							const val = Math.exp(-Math.pow(d, 2)) * 255;
+							data[x * 4 + 16 * y * 4 + 0] = val;
+							data[x * 4 + 16 * y * 4 + 1] = val;
+							data[x * 4 + 16 * y * 4 + 2] = val;
+							data[x * 4 + 16 * y * 4 + 3] = val;
+						}
+					}
+					loadExample({ data, width: 16, height: 16 }, loadFormat);
+				} else {
+					loadExample(examples[example].data, loadFormat);
+				}
 			}
 		}}
 	>
