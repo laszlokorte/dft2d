@@ -13,8 +13,8 @@
 
 	let splitView = $state(true);
 	let keepSymmetric = $state(true);
-	let coordinates = $state("polar");
-	let loadFormat = $state("polar");
+	let coordinates = $state("cartesian");
+	let loadFormat = $state("cartesian");
 	let sliderStyle = $state("plane");
 	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
@@ -751,6 +751,8 @@
 								0,
 								keepSymmetric,
 							);
+
+							recalculate(other, img, dir);
 						}}>Set to (0,0)</button
 					>
 				</div>
