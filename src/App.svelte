@@ -285,7 +285,7 @@
 				newmags[xyMirrorIndex(subject, x, y)] =
 					Math.sqrt(magB * magB + magA * magA) / Math.sqrt(2);
 				newphases[xyMirrorIndex(subject, x, y)] = clipPi(
-					Math.sign(phaB - phaA) *
+					Math.sign(Math.abs(phaB) > Math.abs(phaA) ? phaB : phaA) *
 						Math.max(Math.abs(phaA), Math.abs(phaB)),
 				);
 			}
