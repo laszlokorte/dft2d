@@ -13,9 +13,12 @@
 
 	let splitView = $state(true);
 	let keepSymmetric = $state(true);
-	let coordinates = $state("cartesian");
-	let loadFormat = $state("cartesian");
+	let simplifiedPreview = $state(true);
+	let coordinates = $state("polar");
+	let loadFormat = $state("polar");
 	let sliderStyle = $state("plane");
+	let planeZoom = $state(0);
+	let planeZoomExp = $derived(Math.exp(planeZoom/2));
 	let examples = $state([]);
 	let polar = $derived(coordinates === "polar");
 
@@ -284,8 +287,9 @@
 
 				newmags[xyMirrorIndex(subject, x, y)] =
 					Math.sqrt(magB * magB + magA * magA) / Math.sqrt(2);
+				const phaSign = Math.sign(phaB - phaA) || 1
 				newphases[xyMirrorIndex(subject, x, y)] = clipPi(
-					Math.sign(Math.abs(phaB) > Math.abs(phaA) ? phaB : phaA) *
+					phaSign *
 						Math.max(Math.abs(phaA), Math.abs(phaB)),
 				);
 			}
@@ -788,8 +792,8 @@
 						class="mag-slider"
 						type="range"
 						min="0"
-						max="1"
-						step="0.01"
+						max={planeZoomExp}
+						step={0.001*planeZoomExp}
 						bind:value={img.mags[
 							rows[focus.y] * img.width + columns[focus.x]
 						]}
@@ -883,9 +887,9 @@
 						id="real-{dir}"
 						type="range"
 						class="real-slider"
-						min="-1"
-						max="1"
-						step="0.01"
+						min={-planeZoomExp}
+						max={planeZoomExp}
+						step={0.002*planeZoomExp}
 						value={re}
 						oninput={(e) => {
 							const newMag = Math.hypot(
@@ -943,10 +947,10 @@
 						id="imaginary-{dir}"
 						class="imag-slider"
 						type="range"
-						min="-1"
-						max="1"
+						min={-planeZoomExp}
+						max={planeZoomExp}
 						value={im}
-						step="0.01"
+						step={0.002*planeZoomExp}
 						oninput={(e) => {
 							const newMag = Math.hypot(
 								e.currentTarget.valueAsNumber,
@@ -990,6 +994,11 @@
 					style:--value-phase={img.phases[
 						rows[focus.y] * img.width + columns[focus.x]
 					]}
+
+						onwheel={(evt) => {
+							evt.preventDefault()
+							planeZoom += evt.deltaY/500
+						}}
 				>
 					<line
 						class="polar-control-axis"
@@ -1012,7 +1021,7 @@
 					<circle
 						cx={0}
 						cy={0}
-						r="100"
+						r="{100 * planeZoomExp}"
 						fill="none"
 						class="polar-control-unit"
 						stroke="#eee"
@@ -1046,8 +1055,8 @@
 						class="polar-control-marker-magnitude"
 						x1="0"
 						y1="0"
-						x2={100 * re}
-						y2={-100 * im}
+						x2={100 * re*planeZoomExp}
+						y2={-100 * im*planeZoomExp}
 						stroke="#aaa"
 						stroke-width="1"
 						stroke-dasharray="1 1"
@@ -1056,9 +1065,9 @@
 					<line
 						class="polar-control-marker-real"
 						x1="0"
-						y1={-100 * im}
-						x2={100 * re}
-						y2={-100 * im}
+						y1={-100 * im*planeZoomExp}
+						x2={100 * re*planeZoomExp}
+						y2={-100 * im*planeZoomExp}
 						stroke="#aaa"
 						stroke-width="1"
 						stroke-dasharray="1 1"
@@ -1066,10 +1075,10 @@
 
 					<line
 						class="polar-control-marker-imag"
-						x1={100 * re}
+						x1={100 * re*planeZoomExp}
 						y1="0"
-						x2={100 * re}
-						y2={-100 * im}
+						x2={100 * re*planeZoomExp}
+						y2={-100 * im*planeZoomExp}
 						stroke="#aaa"
 						stroke-width="1"
 						stroke-dasharray="1 1"
@@ -1080,8 +1089,8 @@
 							rows[focus.y] * img.width + columns[focus.x]
 						] < 0.25}
 						text-anchor="middle"
-						x={50 * re}
-						y={-50 * im}
+						x={50 * re*planeZoomExp}
+						y={-50 * im*planeZoomExp}
 						class="polar-control-axis-value"
 						>{numf.format(
 							img.mags[
@@ -1093,16 +1102,16 @@
 					<text
 						class:hidden={Math.abs(im) < 0.2}
 						text-anchor={re > 0 ? "start" : "end"}
-						x={100 * re + Math.sign(re) * 3}
-						y={-50 * im}
+						x={100 * re*planeZoomExp + Math.sign(re) * 3}
+						y={-50 * im*planeZoomExp}
 						class="polar-control-axis-value">{numf.format(im)}</text
 					>
 
 					<text
 						class:hidden={Math.abs(re) < 0.2}
 						text-anchor="middle"
-						x={50 * re}
-						y={-100 * im + 3 - Math.sign(im) * 6}
+						x={50 * re*planeZoomExp}
+						y={-100 * im*planeZoomExp + 3 - Math.sign(im) * 6}
 						class="polar-control-axis-value">{numf.format(re)}</text
 					>
 
@@ -1111,16 +1120,16 @@
 							class="polar-control-marker-magnitude-mirror"
 							x1="0"
 							y1="0"
-							x2={100 * re}
-							y2={100 * im}
+							x2={100 * re*planeZoomExp}
+							y2={100 * im*planeZoomExp}
 							stroke="#aaa"
 							stroke-width="1"
 							stroke-dasharray="1 1"
 						/>
 
 						<circle
-							cx={100 * re}
-							cy={100 * im}
+							cx={100 * re*planeZoomExp}
+							cy={100 * im*planeZoomExp}
 							r="8"
 							fill="DodgerBlue"
 							cursor="move"
@@ -1134,8 +1143,8 @@
 					{/if}
 
 					<circle
-						cx={100 * re}
-						cy={-100 * im}
+						cx={100 * re*planeZoomExp}
+						cy={-100 * im*planeZoomExp}
 						r="10"
 						fill="DodgerBlue"
 						cursor="move"
@@ -1206,12 +1215,12 @@
 
 								const newRe =
 									Math.max(-200, Math.min(200, svgGlobal.x)) /
-									100;
+									100 / planeZoomExp;
 								const newIm =
 									-Math.max(
 										-200,
 										Math.min(200, svgGlobal.y),
-									) / 100;
+									) / 100 / planeZoomExp;
 
 								const newMag = Math.hypot(newRe, newIm);
 
@@ -1230,10 +1239,99 @@
 					/>
 				</svg>
 			{/if}
+			<hr>
+			<label>
+				Zoom:<br>
+				<input type="range" min="-6" max="6" step="0.1" bind:value={planeZoom} style:accent-color="black" />
+
+			</label>
 		</fieldset>
 	{:else}
 		<fieldset>
-			<legend style="height: 2.1em;">Preview Selected Frequency</legend>
+			<legend style="height: 2.1em;">
+			Preview Selected Frequency
+			<div class="radio-list" class:hidden={!keepSymmetric}>
+					<label class="radio-field"
+						><input
+							type="checkbox"
+							bind:checked={simplifiedPreview}
+							disabled={!keepSymmetric}
+							value={"range"}
+							class="radio-control"
+						/>
+						<span class="radio-label">Simplified</span></label
+					>
+				</div>
+			</legend>
+			{#if simplifiedPreview && keepSymmetric}
+			<figure class="plot">
+						<svg class="plot-graphic" {viewBox}>
+							<rect
+								x="0"
+								y="0"
+								width={other.width}
+								height={other.height}
+								fill="black"
+							/>
+							{#each rows as y, yi (yi)}
+								{#each columns as x, xi (xi)}
+									{@const re = Math.cos(
+										dir *
+											(1 +
+												(x * columns[focus.x]) /
+													other.width +
+												(y * rows[focus.y]) /
+													other.height) *
+											2 *
+											Math.PI +
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									)}
+
+									{@const im = Math.sin(
+										dir *
+											(1 +
+												(x * columns[focus.x]) /
+													other.width +
+												(y * rows[focus.y]) /
+													other.height) *
+											2 *
+											Math.PI +
+											other.phases[
+												rows[focus.y] * other.width +
+													columns[focus.x]
+											],
+									)}
+									{@const mag = Math.hypot(re, im)}
+									{@const phase = Math.atan2(im, re)}
+									{@const sat =other.mags[
+													rows[focus.y] *
+														other.width +
+														columns[focus.x]
+												]}
+									{@const light = 60 + re * 25}
+									{@const hue = 200}
+									<rect
+										tabindex="-1"
+										role="button"
+										x={xi}
+										y={yi}
+										width="1"
+										height="1"
+										fill="hsl({hue}, {70 * sat}%, {light}%)"
+										stroke="gray"
+										stroke-width="0.1"
+									></rect>
+								{/each}
+							{/each}
+						</svg>
+						<figcaption class="plot-caption">
+							Magnitude of Frequency Pair
+						</figcaption>
+					</figure>
+			{:else}
 			{#if splitView}
 				<div class="domain-split">
 					<figure class="plot">
@@ -1501,6 +1599,8 @@
 							: "Magnitude/Phase"}
 					</figcaption>
 				</figure>
+			{/if}
+
 			{/if}
 		</fieldset>
 	{/if}
@@ -2301,6 +2401,10 @@
 	}
 
 	.polar-control-axis-value.hidden {
+		display: none;
+	}
+
+	.hidden {
 		display: none;
 	}
 
