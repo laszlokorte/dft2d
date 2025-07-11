@@ -1115,21 +1115,28 @@
 						class="polar-control-axis-value">{numf.format(re)}</text
 					>
 
-					{#if keepSymmetric && (focusMirror.x !== focus.x || focusMirror.y !== focus.y)}
+					{#if (focusMirror.x !== focus.x || focusMirror.y !== focus.y)}
+
+						{@const reMirror =
+							img.mags[rows[focusMirror.y] * img.width + columns[focusMirror.x]] *
+							Math.cos(img.phases[rows[focusMirror.y] * img.width + columns[focusMirror.x]])}
+						{@const imMirror =
+							img.mags[rows[focusMirror.y] * img.width + columns[focusMirror.x]] *
+							Math.sin(img.phases[rows[focusMirror.y] * img.width + columns[focusMirror.x]])}
 						<line
 							class="polar-control-marker-magnitude-mirror"
 							x1="0"
 							y1="0"
-							x2={100 * re*planeZoomExp}
-							y2={100 * im*planeZoomExp}
+							x2={100 * reMirror*planeZoomExp}
+							y2={-100 * imMirror*planeZoomExp}
 							stroke="#aaa"
 							stroke-width="1"
 							stroke-dasharray="1 1"
 						/>
 
 						<circle
-							cx={100 * re*planeZoomExp}
-							cy={100 * im*planeZoomExp}
+							cx={100 * reMirror*planeZoomExp}
+							cy={-100 * imMirror*planeZoomExp}
 							r="8"
 							fill="DodgerBlue"
 							cursor="move"
