@@ -22,3 +22,4 @@ vite.config.ts.timestamp-*
 
 dist
 publish.sh
+publish.ps1
